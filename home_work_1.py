@@ -5,7 +5,6 @@ import requests
 from PIL import Image
 from PIL import Image
 from urllib.request import urlopen
-from pprint import pprint
 
 date_NASA = datetime.datetime.now().date()
 city = 'Moscow Sakhalinskaya street'
