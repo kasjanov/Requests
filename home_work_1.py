@@ -3,7 +3,6 @@ import datetime
 import requests
 
 from PIL import Image
-from PIL import Image
 from urllib.request import urlopen
 
 date_NASA = datetime.datetime.now().date()
@@ -50,4 +49,3 @@ photo_NASA.save(photo_NASA_name)
 print(j_data_NASA.get('url'))
 print(f'{j_data_openstreetmap.get("display_name")} широта {j_data_openstreetmap.get("lat")} '
       f'долгота {j_data_openstreetmap.get("lon")}')
-
