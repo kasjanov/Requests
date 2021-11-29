@@ -14,6 +14,7 @@ def parser_vacancies_on_hh(vacancy_name):
               'ored_clusters': 'true',
               'enable_snippets': 'true',
               'text': vacancy_name,
+              'items_on_page': 20,
               'page': 0}
 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -21,24 +22,31 @@ def parser_vacancies_on_hh(vacancy_name):
 
     response = requests.get(url + '/search/vacancy', params=params, headers=headers)
 
-    dom = BeautifulSoup(response.text, 'html.parser')
-
-    pages = dom.find_all('span', {'class', 'pager-item-not-in-short-range'})
-    last_page = int(pages[len(pages)-1].text)
-
-    vacancies_list = []
-    for page in range(0, last_page):
-        params['page'] = page
-
-        response = requests.get(url + '/search/vacancy', params=params, headers=headers)
-
+    if response.ok:
         dom = BeautifulSoup(response.text, 'html.parser')
-        vacancies = dom.find_all('div', {'class', 'vacancy-serp-item'})
 
-        for vacancy in vacancies:
-            vacancies_list.append(parser_vacancies_on_page(vacancy, url))
+        pages = dom.find_all('span', {'class', 'pager-item-not-in-short-range'})
+        last_page = int(pages[len(pages)-1].text)
+        if last_page != 0:
+            print(last_page)
+        else:
+            print('По вашему запросу нет вакансий')
 
-    return vacancies_list
+        vacancies_list = []
+        for page in range(0, last_page):
+            params['page'] = page
+
+            response = requests.get(url + '/search/vacancy', params=params, headers=headers)
+
+            dom = BeautifulSoup(response.text, 'html.parser')
+            vacancies = dom.find_all('div', {'class', 'vacancy-serp-item'})
+
+            for vacancy in vacancies:
+                vacancies_list.append(parser_vacancies_on_page(vacancy, url))
+
+        return vacancies_list
+    else:
+        print('Неудачная попытка get запроса')
 
 
 def parser_vacancies_on_page(vacancy, url):
@@ -75,14 +83,24 @@ def parser_vacancies_on_page(vacancy, url):
     salary = vacancy.find('span', {'data-qa': 'vacancy-serp__vacancy-compensation'})
     if salary is not None:
         if len(salary.contents) > 3:
-            salary_min = \
-                int(str(salary.contents[2].encode('ascii', 'ignore')).split(' ')[0].split('\'')[1])
-            salary_max = None
-            salary_currency = str(salary.contents[6])
-            if (salary_currency == 'руб.') | (salary_currency == 'руб'):
-                salary_currency = salary_currency_converter('RUB')
+            if str(salary.contents[0]).split()[0] == 'от':
+                salary_min = \
+                    int(str(salary.contents[2].encode('ascii', 'ignore')).split(' ')[0].split('\'')[1])
+                salary_max = None
+                salary_currency = str(salary.contents[6])
+                if (salary_currency == 'руб.') | (salary_currency == 'руб'):
+                    salary_currency = salary_currency_converter('RUB')
+                else:
+                    salary_currency = salary_currency_converter(salary_currency)
             else:
-                salary_currency = salary_currency_converter(salary_currency)
+                salary_max = \
+                    int(str(salary.contents[2].encode('ascii', 'ignore')).split(' ')[0].split('\'')[1])
+                salary_min = None
+                salary_currency = str(salary.contents[6])
+                if (salary_currency == 'руб.') | (salary_currency == 'руб'):
+                    salary_currency = salary_currency_converter('RUB')
+                else:
+                    salary_currency = salary_currency_converter(salary_currency)
         else:
             salary_min = \
                 int(str(salary.contents[0].encode('ascii', 'ignore')).split(' ')[0].split('\'')[1])
