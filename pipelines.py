@@ -5,48 +5,50 @@
 
 
 # useful for handling different item types with a single interface
+from itemadapter import ItemAdapter
 import scrapy
 import os
-
 from scrapy.pipelines.images import ImagesPipeline
-from urllib.parse import urlparse
 from pymongo import MongoClient
+from scrapy.utils.python import to_bytes
+import hashlib
 
 
-class ShopparserPipeline:
+class InstaparserPipeline:
     def __init__(self):
         client = MongoClient('localhost', 27017)
-        self.mongo_base = client.shopparser
+        self.mongo_base = client.instagram_scrapy
 
-    def process_price(self, price, currency, unit):
-        if price:
-            # c = CurrencyCodes()
-            return [price, currency + '/' + unit]
+    def write_to_db(self, item, collection_name):
+        collection = self.mongo_base[collection_name]
+        try:
+            collection.insert_one(item)
+        except Exception as e:
+            print(e, item)
+            pass
 
     def process_item(self, item, spider):
-        item['specifications'] = {item['terms'][i]: item['definitions'][i] for i in range(len(item['terms']))}
-        del item['terms'], item['definitions']
-        item['price'] = self.process_price(item['price'], item['currency'], item['unit'])
-
-        del item['currency'], item['unit']
-        collection = self.mongo_base[spider.name]
-        collection.update_one({'_id': item['_id']}, {'$set': item}, upsert=True)
-
+        self.write_to_db(item, spider.name)
         return item
 
 
-class ShopparserPhotosPipeline(ImagesPipeline):
+class InstaparserImagesPipeline(ImagesPipeline):
     def get_media_requests(self, item, info):
-        if item['photos']:
-            for img in item['photos']:
-                try:
-                    yield scrapy.Request(img)
-                except Exception as e:
-                    print(e)
+        if item['photo_url']:
+            try:
+                yield scrapy.Request(item['photo_url'], meta=item)
+            except Exception as e:
+                print(e)
+
+    def file_path(self, request, response=None, info=None, ):
+        item = request.meta
+        name = item['user_name']
+        url = request.url
+        media_guid = hashlib.sha1(to_bytes(url)).hexdigest()
+        media_ext = os.path.splitext(url)[1]
+        return f'full/{name}/%s%s.jpg' % (media_guid, media_ext)
 
     def item_completed(self, results, item, info):
-        item['photos'] = [itm[1] for itm in results if itm[0]]
+        if results:
+            item['photo_url'] = [itm[1] for itm in results if itm[0]]
         return item
-
-    def file_path(self, request, response=None, info=None, *, item=None):
-        return str(item['_id']) + '/' + os.path.basename(urlparse(request.url).path)
