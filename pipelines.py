@@ -5,48 +5,41 @@
 
 
 # useful for handling different item types with a single interface
+from itemadapter import ItemAdapter
+import hashlib
 import scrapy
 import os
 
-from scrapy.pipelines.images import ImagesPipeline
-from urllib.parse import urlparse
 from pymongo import MongoClient
+from scrapy.pipelines.images import ImagesPipeline
+from scrapy.utils.python import to_bytes
+from urllib.parse import urlparse
 
 
-class ShopparserPipeline:
+class InstaparserPipeline:
     def __init__(self):
         client = MongoClient('localhost', 27017)
-        self.mongo_base = client.shopparser
-
-    def process_price(self, price, currency, unit):
-        if price:
-            # c = CurrencyCodes()
-            return [price, currency + '/' + unit]
+        self.mongo_base = client.instaparser
 
     def process_item(self, item, spider):
-        item['specifications'] = {item['terms'][i]: item['definitions'][i] for i in range(len(item['terms']))}
-        del item['terms'], item['definitions']
-        item['price'] = self.process_price(item['price'], item['currency'], item['unit'])
-
-        del item['currency'], item['unit']
-        collection = self.mongo_base[spider.name]
+        collection = self.mongo_base[spider.name][item['subs_type']][item['source_name']]
         collection.update_one({'_id': item['_id']}, {'$set': item}, upsert=True)
-
         return item
 
 
-class ShopparserPhotosPipeline(ImagesPipeline):
+class InstaparserImagesPipeline(ImagesPipeline):
     def get_media_requests(self, item, info):
-        if item['photos']:
-            for img in item['photos']:
-                try:
-                    yield scrapy.Request(img)
-                except Exception as e:
-                    print(e)
+        if item['photo_url']:
+            try:
+                yield scrapy.Request(item['photo_url'], meta=item)
+            except Exception as e:
+                print(e)
 
     def item_completed(self, results, item, info):
-        item['photos'] = [itm[1] for itm in results if itm[0]]
+        if results:
+            item['photo_url'] = [itm[1] for itm in results if itm[0]]
         return item
 
     def file_path(self, request, response=None, info=None, *, item=None):
-        return str(item['_id']) + '/' + os.path.basename(urlparse(request.url).path)
+        return str(item['subs_type']) + '/' + str(item['source_name']) + '/' + \
+               str(item['user_name']) + '/' + str(item['user_name']) + '.jpg'
